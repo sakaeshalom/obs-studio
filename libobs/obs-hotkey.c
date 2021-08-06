@@ -1194,8 +1194,11 @@ static inline bool modifiers_match(obs_hotkey_binding_t *binding,
 				   uint32_t modifiers_, bool strict_modifiers)
 {
 	uint32_t modifiers = binding->key.modifiers;
-	return !modifiers ||
-	       (!strict_modifiers && (modifiers & modifiers_) == modifiers) ||
+	// If not strict, require only the modifiers (including NO modifiers)
+	//   requested by the hotkey definition. (legacy behavior)
+	// If strict, the current modifiers (including NO modifiers) must
+	//   match the hotkey definition. ("shortcut" behavior)
+	return (!strict_modifiers && (modifiers & modifiers_) == modifiers) ||
 	       (strict_modifiers && modifiers == modifiers_);
 }
 
@@ -1243,7 +1246,7 @@ static inline void handle_binding(obs_hotkey_binding_t *binding,
 		modifiers_match(binding, modifiers, strict_modifiers);
 	bool modifiers_only = binding->key.key == OBS_KEY_NONE;
 
-	if (!binding->key.modifiers)
+	if (!strict_modifiers && !binding->key.modifiers)
 		binding->modifiers_match = true;
 
 	if (modifiers_only)
