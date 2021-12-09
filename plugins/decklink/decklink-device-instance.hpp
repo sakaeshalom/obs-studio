@@ -161,6 +161,7 @@ protected:
 	speaker_layout channelFormat = SPEAKERS_STEREO;
 	bool swap;
 	bool allow10Bit;
+	int n_frame_ignored_cont = 0;
 
 	OBSVideoFrame *convertFrame = nullptr;
 	std::vector<uint8_t> frameBlobs[FrameQueueFrameCount];
