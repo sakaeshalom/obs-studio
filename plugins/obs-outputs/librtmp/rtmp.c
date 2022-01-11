@@ -811,7 +811,7 @@ add_addr_info(struct sockaddr_storage *service, socklen_t *addrlen, AVal *host, 
     // prefer ipv4 results, since lots of ISPs have broken ipv6 connectivity
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
     {
-        if (ptr->ai_family == AF_INET && (!addrlen_hint || ptr->ai_addrlen == addrlen_hint))
+        if ((ptr->ai_family == AF_INET || ptr->ai_family == AF_INET6) && (!addrlen_hint || ptr->ai_addrlen == addrlen_hint))
         {
             memcpy(service, ptr->ai_addr, ptr->ai_addrlen);
             *addrlen = (socklen_t)ptr->ai_addrlen;
