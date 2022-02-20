@@ -715,8 +715,6 @@ void DeckLinkDeviceInstance::CorrectDrift()
 		clockAdjustment += (clockAdjustment_next > clockAdjustment) ? 1 : -1;
 
 		SetClockTimingAdjustment(clockAdjustment);
-
-		blog(LOG_INFO, "Clock adjustment is at %ld | Drift: %ldus", clockAdjustment, average / 1000);
 	}
 }
 
@@ -766,12 +764,6 @@ HRESULT	DeckLinkDeviceInstance::ScheduledFrameCompleted (
 		IDeckLinkVideoFrame* completedFrame,
 		BMDOutputFrameCompletionResult result)
 {
-	if (result == bmdOutputFrameDropped)
-		blog(LOG_ERROR, "Dropped Frame");
-
-	if (result == bmdOutputFrameDisplayedLate)
-		blog(LOG_ERROR, "Late Frame");
-
 	return S_OK;
 }
 
