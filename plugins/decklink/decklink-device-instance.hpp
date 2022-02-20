@@ -39,7 +39,7 @@ protected:
 	int n_frame_ignored_cont = 0;
 
 	OBSVideoFrame *convertFrame = nullptr;
-	IDeckLinkMutableVideoFrame *decklinkOutputFrame = nullptr;
+	ComPtr<IDeckLinkMutableVideoFrame> decklinkOutputFrame;
 
 	void FinalizeStream();
 	void SetupVideoFormat(DeckLinkDeviceMode *mode_);
