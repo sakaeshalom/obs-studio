@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+// #define DEBUG_COMPENSATION
+
 #define _FILE_OFFSET_BITS 64
 
 #include <time.h>
@@ -27,6 +29,8 @@
 #include "utf8.h"
 #include "dstr.h"
 #include "obs.h"
+#include "threading.h"
+#include "media-io/lag_lead_filter.h"
 
 FILE *os_wfopen(const wchar_t *path, const char *mode)
 {
@@ -807,4 +811,80 @@ char *os_generate_formatted_filename(const char *extension, bool space,
 		dstr_mid(&sf, &sf, 0, 255);
 
 	return sf.array;
+}
+
+static pthread_mutex_t compensation_mutex = PTHREAD_MUTEX_INITIALIZER;
+static volatile int64_t compensation_offset = 0;
+static int64_t compensation_offset_rem = 0;
+static volatile bool compensation_filter_configured = false;
+static struct lag_lead_filter compensation_filter = {0};
+static uint64_t compensation_last_ns = 0;
+#define COMPENSATION_TICK_MAX_NS 50000000 // twice of obs_hotkey_thread
+
+uint64_t os_time_compensation_ns(uint64_t ns)
+{
+	if (compensation_filter_configured &&
+	    pthread_mutex_trylock(&compensation_mutex) == 0) {
+		uint32_t tick_ns;
+		if (ns < compensation_last_ns)
+			tick_ns = 0;
+		else if (ns < compensation_last_ns + COMPENSATION_TICK_MAX_NS)
+			tick_ns = ns - compensation_last_ns;
+		else
+			tick_ns = COMPENSATION_TICK_MAX_NS;
+		lag_lead_filter_tick(&compensation_filter, 1000000000, tick_ns);
+		compensation_last_ns += tick_ns;
+		compensation_offset_rem +=
+			lag_lead_filter_get_drift(&compensation_filter) *
+			tick_ns;
+		if (compensation_offset_rem < 0) {
+			int64_t add = compensation_offset_rem / 1000000000;
+			if (-add > tick_ns)
+				add = -tick_ns;
+			compensation_offset += add;
+			compensation_offset_rem -= add * 1000000000;
+		} else {
+			compensation_offset +=
+				compensation_offset_rem / 1000000000;
+			compensation_offset_rem %= 1000000000;
+		}
+		pthread_mutex_unlock(&compensation_mutex);
+	}
+
+	return ns + os_atomic_load_long(&compensation_offset);
+}
+
+#ifdef _WIN32
+uint64_t os_time_compensation_peek_offset_ns()
+{
+	return os_atomic_load_long(&compensation_offset);
+}
+#endif // _WIN32
+
+void os_time_compensation_set_error(int64_t error_ns)
+{
+	if (pthread_mutex_lock(&compensation_mutex) == 0) {
+		if (!compensation_filter_configured) {
+			lag_lead_filter_reset(&compensation_filter);
+			lag_lead_filter_update(&compensation_filter);
+			compensation_last_ns = os_gettime_ns();
+			compensation_filter_configured = true;
+		}
+		lag_lead_filter_set_error_ns(&compensation_filter, error_ns);
+
+#ifdef DEBUG_COMPENSATION
+		blog(LOG_INFO,
+		     "os_time_compensation_set_error: error=%f ms compensation_offset=%f ms"
+		     " internal-condition=(%f %f)",
+		     error_ns * 1e-6, compensation_offset * 1e-6,
+		     compensation_filter.vc1, compensation_filter.vc2);
+#endif
+
+		pthread_mutex_unlock(&compensation_mutex);
+	}
+}
+
+void os_time_compensation_disable()
+{
+	compensation_filter_configured = false;
 }
