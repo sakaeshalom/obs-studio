@@ -3,6 +3,8 @@
 #define LOG(level, message, ...) \
 	blog(level, "%s: " message, "decklink", ##__VA_ARGS__)
 
+#include <atomic>
+
 #include <obs-module.h>
 #include "decklink-device.hpp"
 #include "../../libobs/media-io/video-scaler.h"
@@ -11,8 +13,7 @@
 class AudioRepacker;
 class DecklinkBase;
 
-class DeckLinkDeviceInstance : public IDeckLinkVideoOutputCallback,
-			       public IDeckLinkInputCallback {
+class DeckLinkDeviceInstance : public IDeckLinkVideoOutputCallback, public IDeckLinkInputCallback {
 protected:
 	struct obs_source_frame2 currentFrame;
 	struct obs_source_audio currentPacket;
@@ -38,10 +39,14 @@ protected:
 	bool swap;
 	bool allow10Bit;
 	int n_frame_ignored_cont = 0;
-	BMDTimeValue outputFrameDuration = 0;
-	BMDTimeScale outputTimeScale = 0;
-	int64_t outputInitialScheduleOffset = 1000000000;
-	int64_t outputDriftOffset = 0;
+
+	uint64_t frameLength = 0;
+	std::atomic<uint64_t> hardwareStartTime = 0;
+	std::atomic<uint64_t> systemStartTime = 0;
+	std::atomic<uint64_t> bufferSize = 100000000;
+	std::atomic<int64_t> timestampOffset = 0;
+
+	uint32_t maxSamples = 0;
 
 	OBSVideoFrame *convertFrame = nullptr;
 	ComPtr<IDeckLinkMutableVideoFrame> decklinkOutputFrame;
@@ -58,10 +63,8 @@ public:
 	DeckLinkDeviceInstance(DecklinkBase *decklink, DeckLinkDevice *device);
 	virtual ~DeckLinkDeviceInstance();
 
-	virtual HRESULT STDMETHODCALLTYPE
-	ScheduledFrameCompleted(IDeckLinkVideoFrame *completedFrame,
-				BMDOutputFrameCompletionResult result);
-	virtual HRESULT STDMETHODCALLTYPE ScheduledPlaybackHasStopped();
+	virtual HRESULT STDMETHODCALLTYPE	ScheduledFrameCompleted (IDeckLinkVideoFrame* completedFrame, BMDOutputFrameCompletionResult result);
+	virtual HRESULT STDMETHODCALLTYPE	ScheduledPlaybackHasStopped ();
 
 	inline DeckLinkDevice *GetDevice() const { return device; }
 	inline long long GetActiveModeId() const
