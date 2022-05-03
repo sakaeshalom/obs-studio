@@ -586,6 +586,7 @@ OBSBasicSettings::OBSBasicSettings(QWidget *parent)
 	HookWidget(ui->auxAudioDevice2,      COMBO_CHANGED,  AUDIO_CHANGED);
 	HookWidget(ui->auxAudioDevice3,      COMBO_CHANGED,  AUDIO_CHANGED);
 	HookWidget(ui->auxAudioDevice4,      COMBO_CHANGED,  AUDIO_CHANGED);
+	HookWidget(ui->masterAudioDevice,    COMBO_CHANGED,  AUDIO_CHANGED);
 	HookWidget(ui->baseResolution,       CBEDIT_CHANGED, VIDEO_RES);
 	HookWidget(ui->outputResolution,     CBEDIT_CHANGED, VIDEO_RES);
 	HookWidget(ui->downscaleFilter,      COMBO_CHANGED,  VIDEO_CHANGED);
@@ -2592,6 +2593,31 @@ void OBSBasicSettings::LoadListValues(QComboBox *widget, obs_property_t *prop,
 	}
 }
 
+static void LoadMasterAudioDeviceList(QComboBox *widget)
+{
+	widget->addItem(QTStr("Basic.Settings.Audio.Disabled"), "");
+
+	bool has_master = false;
+
+	for (int index = 1; index <= 6; index++) {
+		OBSSourceAutoRelease source = obs_get_output_source(index);
+		if (!source)
+			continue;
+
+		const char *name = obs_source_get_name(source);
+		widget->addItem(QT_UTF8(name), index);
+
+		uint32_t flags = obs_source_get_flags(source);
+		if (flags & OBS_SOURCE_FLAG_MASTER_CLOCK) {
+			widget->setCurrentIndex(widget->count() - 1);
+			has_master = true;
+		}
+	}
+
+	if (!has_master)
+		widget->setCurrentIndex(0);
+}
+
 void OBSBasicSettings::LoadAudioDevices()
 {
 	const char *input_id = App()->InputAudioSource();
@@ -2622,6 +2648,8 @@ void OBSBasicSettings::LoadAudioDevices()
 		ui->sampleRate->setEnabled(false);
 		ui->channelSetup->setEnabled(false);
 	}
+
+	LoadMasterAudioDeviceList(ui->masterAudioDevice);
 }
 
 #define NBSP "\xC2\xA0"
@@ -3946,6 +3974,29 @@ void OBSBasicSettings::SaveOutputSettings()
 	main->ResetOutputs();
 }
 
+static void UpdateMasterAudioDevice(const QComboBox *widget)
+{
+	int selected = widget->currentData().value<int>();
+
+	for (int index = 1; index <= 6; index++) {
+		OBSSourceAutoRelease source = obs_get_output_source(index);
+		if (!source)
+			continue;
+
+		uint32_t flags = obs_source_get_flags(source);
+		if (selected == index &&
+		    !(flags & OBS_SOURCE_FLAG_MASTER_CLOCK)) {
+			flags |= OBS_SOURCE_FLAG_MASTER_CLOCK;
+			obs_source_set_flags(source, flags);
+
+		} else if (selected != index &&
+			   !!(flags & OBS_SOURCE_FLAG_MASTER_CLOCK)) {
+			flags &= ~OBS_SOURCE_FLAG_MASTER_CLOCK;
+			obs_source_set_flags(source, flags);
+		}
+	}
+}
+
 void OBSBasicSettings::SaveAudioSettings()
 {
 	QString sampleRateStr = ui->sampleRate->currentText();
@@ -4063,6 +4114,9 @@ void OBSBasicSettings::SaveAudioSettings()
 	UpdateAudioDevice(true, ui->auxAudioDevice2, "Basic.AuxDevice2", 4);
 	UpdateAudioDevice(true, ui->auxAudioDevice3, "Basic.AuxDevice3", 5);
 	UpdateAudioDevice(true, ui->auxAudioDevice4, "Basic.AuxDevice4", 6);
+
+	UpdateMasterAudioDevice(ui->masterAudioDevice);
+
 	main->SaveProject();
 }
 
