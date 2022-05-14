@@ -1622,7 +1622,7 @@ void OBSBasic::SetPreviewProgramMode(bool enabled)
 		RefreshQuickTransitions();
 
 		programLabel = new QLabel(QTStr("StudioMode.Program"), this);
-		programLabel->setSizePolicy(QSizePolicy::Preferred,
+		programLabel->setSizePolicy(QSizePolicy::Ignored,
 					    QSizePolicy::Preferred);
 		programLabel->setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
 		programLabel->setProperty("themeID", "previewProgramLabels");
@@ -1647,6 +1647,8 @@ void OBSBasic::SetPreviewProgramMode(bool enabled)
 		ui->previewLayout->addWidget(programWidget);
 		ui->previewLayout->setAlignment(programOptions,
 						Qt::AlignCenter);
+
+		UpdateStudioModeSceneLabels();
 
 		if (api)
 			api->on_event(OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED);
@@ -1822,4 +1824,24 @@ int OBSBasic::GetOverrideTransitionDuration(OBSSource source)
 	obs_data_set_default_int(data, "transition_duration", 300);
 
 	return (int)obs_data_get_int(data, "transition_duration");
+}
+
+void OBSBasic::UpdateStudioModeSceneLabels()
+{
+	if (!IsPreviewProgramMode())
+		return;
+
+	QString preview = QString("%1 - %2").arg(
+		QTStr("StudioMode.Preview"),
+		QT_UTF8(obs_source_get_name(GetCurrentSceneSource())));
+
+	QString program = QString("%1 - %2").arg(
+		QTStr("StudioMode.Program"),
+		QT_UTF8(obs_source_get_name(GetProgramSource())));
+
+	if (ui->previewLabel->text() != preview)
+		ui->previewLabel->setText(preview);
+
+	if (programLabel && programLabel->text() != program)
+		programLabel->setText(program);
 }

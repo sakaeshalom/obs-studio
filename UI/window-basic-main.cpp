@@ -3048,6 +3048,8 @@ void OBSBasic::UpdateContextBarDeferred(bool force)
 
 void OBSBasic::UpdateContextBar(bool force)
 {
+	UpdateStudioModeSceneLabels();
+
 	if (!ui->contextContainer->isVisible() && !force)
 		return;
 

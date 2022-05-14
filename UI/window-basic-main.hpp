@@ -533,6 +533,8 @@ private:
 	void ReceivedIntroJson(const QString &text);
 	void ShowWhatsNew(const QString &url);
 
+	void UpdateStudioModeSceneLabels();
+
 #ifdef BROWSER_AVAILABLE
 	QList<QSharedPointer<QDockWidget>> extraBrowserDocks;
 	QList<QSharedPointer<QAction>> extraBrowserDockActions;
