@@ -832,8 +832,7 @@ uint64_t os_time_compensation_ns(uint64_t ns)
 			tick_ns = ns - compensation_last_ns;
 		else
 			tick_ns = COMPENSATION_TICK_MAX_NS;
-		lag_lead_filter_tick(&compensation_filter, 1000000000, tick_ns);
-		compensation_last_ns += tick_ns;
+		compensation_last_ns = ns;
 		compensation_offset_rem +=
 			lag_lead_filter_get_drift(&compensation_filter) *
 			tick_ns;
@@ -864,20 +863,36 @@ uint64_t os_time_compensation_peek_offset_ns()
 void os_time_compensation_set_error(int64_t error_ns)
 {
 	if (pthread_mutex_lock(&compensation_mutex) == 0) {
+		static uint64_t last_ns = 0;
+		uint64_t current_ns = os_gettime_ns();
 		if (!compensation_filter_configured) {
 			lag_lead_filter_reset(&compensation_filter);
 			lag_lead_filter_update(&compensation_filter);
-			compensation_last_ns = os_gettime_ns();
+			compensation_last_ns = current_ns;
 			compensation_filter_configured = true;
+			last_ns = current_ns;
 		}
+		uint32_t tick_ns = 0;
+		if (current_ns - last_ns < COMPENSATION_TICK_MAX_NS)
+			tick_ns = current_ns - last_ns;
+		else
+			tick_ns = COMPENSATION_TICK_MAX_NS;
+
+		lag_lead_filter_tick(&compensation_filter, 1000000000, tick_ns);
+		last_ns = current_ns;
+
 		lag_lead_filter_set_error_ns(&compensation_filter, error_ns);
 
 #ifdef DEBUG_COMPENSATION
-		blog(LOG_INFO,
-		     "os_time_compensation_set_error: error=%f ms compensation_offset=%f ms"
-		     " internal-condition=(%f %f)",
-		     error_ns * 1e-6, compensation_offset * 1e-6,
-		     compensation_filter.vc1, compensation_filter.vc2);
+		static uint64_t log_last_ns = 0;
+		if (current_ns - log_last_ns > 1000250000) {
+			blog(LOG_INFO,
+			     "os_time_compensation_set_error: error=%f ms compensation_offset=%f ms"
+			     " internal-condition=(%f %f)",
+			     error_ns * 1e-6, compensation_offset * 1e-6,
+			     compensation_filter.vc1, compensation_filter.vc2);
+			log_last_ns = current_ns;
+		}
 #endif
 
 		pthread_mutex_unlock(&compensation_mutex);
