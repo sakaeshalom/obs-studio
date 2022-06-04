@@ -1031,8 +1031,6 @@ void gs_draw_sprite(gs_texture_t *tex, uint32_t flip, uint32_t width,
 		}
 	} else {
 		if (!width || !height) {
-			blog(LOG_ERROR, "A sprite cannot be drawn without "
-					"a width/height");
 			return;
 		}
 	}
