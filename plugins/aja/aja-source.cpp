@@ -909,6 +909,10 @@ static void aja_source_update(void *data, obs_data_t *settings)
 		ajaSource->Deactivate();
 	}
 
+	obs_source_set_async_compensation(
+		ajaSource->GetOBSSource(),
+		obs_data_get_bool(settings, "async_compensation"));
+
 	auto &cardManager = aja::CardManager::Instance();
 	cardManager.EnumerateCards();
 	auto cardEntry = cardManager.GetCardEntry(wantCardID);
@@ -1102,6 +1106,9 @@ static obs_properties_t *aja_source_get_properties(void *data)
 	obs_property_set_modified_callback2(io_select_list,
 					    aja_io_selection_changed, data);
 
+	obs_properties_add_bool(props, "async_compensation",
+				obs_module_text("AsyncCompensation"));
+
 	return props;
 }
 
@@ -1121,6 +1128,7 @@ void aja_source_get_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, kUIPropDeactivateWhenNotShowing.id,
 				  false);
 	obs_data_set_default_bool(settings, kUIPropBuffering.id, false);
+	obs_data_set_default_bool(settings, "async_compensation", true);
 }
 
 void aja_source_save(void *data, obs_data_t *settings)
