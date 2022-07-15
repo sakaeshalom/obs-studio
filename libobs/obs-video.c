@@ -84,6 +84,9 @@ extern void render_display(struct obs_display *display);
 static inline void render_displays(void)
 {
 	struct obs_display *display;
+	bool too_slow = false;
+	static int next_display = 0;
+	int i_display;
 
 	if (!obs->data.valid)
 		return;
@@ -91,16 +94,36 @@ static inline void render_displays(void)
 	gs_enter_context(obs->video.graphics);
 
 	/* render extra displays/swaps */
-	pthread_mutex_lock(&obs->data.displays_mutex);
-
-	display = obs->data.first_display;
-	while (display) {
-		render_display(display);
-		display = display->next;
+	if (pthread_mutex_trylock(&obs->data.displays_mutex)) {
+		blog(LOG_ERROR, "pthread_mutex_trylock(displays_mutex) failed.");
+		goto lockfail;
 	}
+
+	uint64_t t0 = obs_get_video_frame_time();
+	uint64_t tth = t0 + obs_get_frame_interval_ns() * 3 / 4;
+	display = obs->data.first_display;
+	i_display = 0;
+	while (display) {
+		if (i_display>=next_display) {
+			render_display(display);
+			uint64_t t1 = os_gettime_ns();
+			if (t1 > tth) {
+				too_slow = 1;
+				next_display = i_display+1;
+				break;
+			}
+		}
+
+		display = display->next;
+		i_display ++;
+	}
+
+	if (!too_slow)
+		next_display = 0;
 
 	pthread_mutex_unlock(&obs->data.displays_mutex);
 
+lockfail:
 	gs_leave_context();
 }
 
@@ -710,6 +733,7 @@ static inline void output_video_data(struct obs_core_video *video,
 	}
 }
 
+static int render_too_slow = 0;
 static inline void video_sleep(struct obs_core_video *video, bool raw_active,
 			       const bool gpu_active, uint64_t *p_time,
 			       uint64_t interval_ns)
@@ -722,6 +746,12 @@ static inline void video_sleep(struct obs_core_video *video, bool raw_active,
 	if (os_sleepto_ns(t)) {
 		*p_time = t;
 		count = 1;
+		render_too_slow = 0;
+	} else if (os_gettime_ns()-t < interval_ns / 2) {
+		/* If the lag is less than the half of the interval, just skip display rendering. */
+		*p_time = t;
+		count = 1;
+		render_too_slow ++;
 	} else {
 		const uint64_t udiff = os_gettime_ns() - cur_time;
 		int64_t diff;
@@ -730,6 +760,7 @@ static inline void video_sleep(struct obs_core_video *video, bool raw_active,
 			(diff > (int64_t)interval_ns) ? diff : interval_ns;
 		count = (int)(clamped_diff / interval_ns);
 		*p_time = cur_time + interval_ns * count;
+		render_too_slow ++;
 	}
 
 	video->total_frames += count;
@@ -936,6 +967,7 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 
 	uint64_t frame_start = os_gettime_ns();
 	uint64_t frame_time_ns;
+	uint64_t t0, t1;
 	bool raw_active = os_atomic_load_long(&obs->video.raw_active) > 0;
 #ifdef _WIN32
 	const bool gpu_active =
@@ -966,9 +998,12 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	gs_leave_context();
 
 	profile_start(tick_sources_name);
+	t0 = os_gettime_ns();
 	context->last_time =
 		tick_sources(obs->video.video_time, context->last_time);
 	profile_end(tick_sources_name);
+	t1 = os_gettime_ns() - t0;
+	if (t1 > context->interval) blog(LOG_ERROR, "obs_graphics_thread_loop: tick_sources took %dms", (int)(t1/1000000));
 
 #ifdef _WIN32
 	MSG msg;
@@ -982,9 +1017,14 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	output_frame(raw_active, gpu_active);
 	profile_end(output_frame_name);
 
-	profile_start(render_displays_name);
-	render_displays();
-	profile_end(render_displays_name);
+	if ((render_too_slow % 32) == 0) {
+		profile_start(render_displays_name);
+		t0 = os_gettime_ns();
+		render_displays();
+		profile_end(render_displays_name);
+		t1 = os_gettime_ns() - t0;
+		if (t1 > context->interval) blog(LOG_ERROR, "obs_graphics_thread_loop: render_displays took %dms", (int)(t1/1000000));
+	}
 
 	execute_graphics_tasks();
 
@@ -1023,6 +1063,7 @@ void *obs_graphics_thread(void *param)
 	struct winrt_state winrt;
 	init_winrt_state(&winrt);
 #endif // #ifdef _WIN32
+	blog(LOG_INFO, "entering obs_graphics_thread");
 
 	is_graphics_thread = true;
 
