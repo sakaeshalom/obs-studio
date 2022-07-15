@@ -197,6 +197,9 @@ void DeckLinkDeviceInstance::HandleVideoFrame(
 	currentFrame.height = (uint32_t)frame->GetHeight();
 	currentFrame.timestamp = timestamp;
 
+	if (currentFrame.width == 0 || currentFrame.height == 0)
+		return;
+
 	if (test_zero(currentFrame.data[0], currentFrame.linesize[0])) {
 		if(n_frame_ignored_cont++<5)
 			blog(LOG_WARNING, "skipping frame because first line was not updated.");
