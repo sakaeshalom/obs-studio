@@ -8484,6 +8484,16 @@ OBSProjector *OBSBasic::OpenProjector(obs_source_t *source, int monitor,
 	OBSProjector *projector =
 		new OBSProjector(nullptr, source, monitor, type);
 
+	if (monitor != -1) {
+		for (size_t i = 0; i < projectors.size(); i++) {
+			if (projectors[i]->GetMonitor() == monitor) {
+				projectors[i]->deleteLater();
+				projectors.erase(projectors.begin() + i);
+				break;
+			}
+		}
+	}
+
 	projectors.emplace_back(projector);
 
 	return projector;
