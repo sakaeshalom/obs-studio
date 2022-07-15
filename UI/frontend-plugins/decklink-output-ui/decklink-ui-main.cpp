@@ -513,9 +513,6 @@ void obs_module_unload(void)
 
 void obs_module_post_load(void)
 {
-	if (!obs_get_module("decklink"))
-		return;
-
 	addOutputUI();
 
 	obs_frontend_add_event_callback(OBSEvent, nullptr);
