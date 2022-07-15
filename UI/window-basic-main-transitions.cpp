@@ -435,6 +435,8 @@ void OBSBasic::TransitionToScene(OBSSource source, bool force,
 			TransitionFullyStopped();
 	}
 
+	UpdateStudioModeSceneLabels();
+
 cleanup:
 	if (usingPreviewProgram && sceneDuplicationMode)
 		obs_scene_release(scene);
@@ -743,6 +745,8 @@ void OBSBasic::SetCurrentScene(OBSSource scene, bool force)
 			}
 		}
 	}
+
+	UpdateStudioModeSceneLabels();
 
 	UpdateContextBar(true);
 
