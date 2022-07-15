@@ -18,7 +18,6 @@
 
 AJASource::AJASource(obs_source_t *source)
 	: mVideoBuffer{},
-	  mAudioBuffer{},
 	  mCard{nullptr},
 	  mSourceName{""},
 	  mCardID{""},
@@ -37,9 +36,7 @@ AJASource::~AJASource()
 {
 	Deactivate();
 	mVideoBuffer.Deallocate();
-	mAudioBuffer.Deallocate();
 	mVideoBuffer = 0;
-	mAudioBuffer = 0;
 }
 
 void AJASource::SetCard(CNTV2Card *card)
@@ -278,24 +275,6 @@ void AJASource::CaptureThread(AJAThread *thread, void *data)
 			os_sleep_ms(250);
 			obs_source_update(ajaSource->mSource, settings);
 			break;
-		}
-
-		if (!TransferAudio(card, audioSystem, ajaSource->mAudioBuffer,
-				   offsets)) {
-			ResetAudioBufferOffsets(card, audioSystem, offsets);
-		} else {
-			offsets.lastAddress = offsets.currentAddress;
-			obs_source_audio audioPacket;
-			audioPacket.samples_per_sec = 48000;
-			audioPacket.format = AUDIO_FORMAT_32BIT;
-			audioPacket.speakers = SPEAKERS_7POINT1;
-			audioPacket.frames = offsets.bytesRead / 32;
-			audioPacket.timestamp =
-				get_sample_time(audioPacket.frames, 48000);
-			audioPacket.data[0] = (uint8_t *)ajaSource->mAudioBuffer
-						      .GetHostPointer();
-			obs_source_output_audio(ajaSource->mSource,
-						&audioPacket);
 		}
 
 		if (ajaSource->mVideoBuffer.GetByteCount() == 0) {
@@ -544,13 +523,6 @@ void AJASource::ResetVideoBuffer(NTV2VideoFormat vf, NTV2PixelFormat pf)
 	}
 }
 
-void AJASource::ResetAudioBuffer(size_t size)
-{
-	if (mAudioBuffer)
-		mAudioBuffer.Deallocate();
-	mAudioBuffer.Allocate(size, true);
-}
-
 static const char *aja_source_get_name(void *);
 static void *aja_source_create(obs_data_t *, obs_source_t *);
 static void aja_source_destroy(void *);
@@ -718,7 +690,6 @@ void *aja_source_create(obs_data_t *settings, obs_source_t *source)
 	obs_source_set_async_decoupled(source, true);
 
 	ajaSource->SetOBSSource(source);
-	ajaSource->ResetAudioBuffer(NTV2_AUDIOSIZE_MAX);
 	ajaSource->Activate(false);
 
 	obs_source_update(source, settings);
@@ -747,9 +718,7 @@ void aja_source_destroy(void *data)
 	}
 
 	ajaSource->mVideoBuffer.Deallocate();
-	ajaSource->mAudioBuffer.Deallocate();
 	ajaSource->mVideoBuffer = 0;
-	ajaSource->mAudioBuffer = 0;
 
 	auto &cardManager = aja::CardManager::Instance();
 	const auto &cardID = ajaSource->CardID();

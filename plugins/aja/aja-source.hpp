@@ -55,10 +55,7 @@ public:
 
 	void ResetVideoBuffer(NTV2VideoFormat vf, NTV2PixelFormat pf);
 
-	void ResetAudioBuffer(size_t size);
-
 	NTV2_POINTER mVideoBuffer;
-	NTV2_POINTER mAudioBuffer;
 
 private:
 	CNTV2Card *mCard;
