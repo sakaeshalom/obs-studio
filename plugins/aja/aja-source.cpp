@@ -26,7 +26,6 @@ AJASource::AJASource(obs_source_t *source)
 	  mBuffering{false},
 	  mIsCapturing{false},
 	  mSourceProps{},
-	  mTestPattern{},
 	  mCaptureThread{nullptr},
 	  mMutex{},
 	  mSource{source},
@@ -37,7 +36,6 @@ AJASource::AJASource(obs_source_t *source)
 AJASource::~AJASource()
 {
 	Deactivate();
-	mTestPattern.clear();
 	mVideoBuffer.Deallocate();
 	mAudioBuffer.Deallocate();
 	mVideoBuffer = 0;
@@ -123,51 +121,6 @@ static void ResetAudioBufferOffsets(CNTV2Card *card,
 	card->GetAudioWrapAddress(offsets.wrapAddress, audioSystem);
 	offsets.wrapAddress += offsets.readOffset;
 	offsets.lastAddress = offsets.readOffset;
-}
-
-void AJASource::GenerateTestPattern(NTV2VideoFormat vf, NTV2PixelFormat pf,
-				    NTV2TestPatternSelect ps)
-{
-	NTV2VideoFormat vid_fmt = vf;
-	NTV2PixelFormat pix_fmt = pf;
-	if (vid_fmt == NTV2_FORMAT_UNKNOWN)
-		vid_fmt = NTV2_FORMAT_720p_5994;
-	if (pix_fmt == NTV2_FBF_INVALID)
-		pix_fmt = kDefaultAJAPixelFormat;
-
-	NTV2FormatDesc fd(vid_fmt, pix_fmt, NTV2_VANCMODE_OFF);
-	auto bufSize = fd.GetTotalRasterBytes();
-	if (bufSize != mTestPattern.size()) {
-		mTestPattern.clear();
-		mTestPattern.resize(bufSize);
-		NTV2TestPatternGen gen;
-		gen.DrawTestPattern(ps, fd.GetRasterWidth(),
-				    fd.GetRasterHeight(), pix_fmt,
-				    mTestPattern);
-	}
-	if (mTestPattern.size() == 0) {
-		blog(LOG_DEBUG,
-		     "AJASource::GenerateTestPattern: Error generating test pattern!");
-		return;
-	}
-
-	struct obs_source_frame2 obsFrame;
-	obsFrame.flip = false;
-	obsFrame.timestamp = os_gettime_ns();
-	obsFrame.width = fd.GetRasterWidth();
-	obsFrame.height = fd.GetRasterHeight();
-	obsFrame.format = aja::AJAPixelFormatToOBSVideoFormat(pix_fmt);
-	obsFrame.data[0] = mTestPattern.data();
-	obsFrame.linesize[0] = fd.GetBytesPerRow();
-	video_colorspace colorspace = VIDEO_CS_709;
-	if (NTV2_IS_SD_VIDEO_FORMAT(vid_fmt))
-		colorspace = VIDEO_CS_601;
-	video_format_get_parameters(colorspace, VIDEO_RANGE_PARTIAL,
-				    obsFrame.color_matrix,
-				    obsFrame.color_range_min,
-				    obsFrame.color_range_max);
-	obs_source_output_video2(mSource, &obsFrame);
-	blog(LOG_DEBUG, "AJASource::GenerateTestPattern: Black");
 }
 
 static inline uint64_t samples_to_ns(size_t frames, uint_fast32_t rate)
@@ -306,8 +259,7 @@ void AJASource::CaptureThread(AJAThread *thread, void *data)
 		if (newVideoFormat == NTV2_FORMAT_UNKNOWN) {
 			blog(LOG_DEBUG,
 			     "AJASource::CaptureThread: Video format unknown!");
-			ajaSource->GenerateTestPattern(videoFormat, pixelFormat,
-						       NTV2_TestPatt_Black);
+			obs_source_output_video2(ajaSource->GetOBSSource(), NULL);
 			os_sleep_ms(250);
 			continue;
 		}
@@ -386,9 +338,7 @@ void AJASource::CaptureThread(AJAThread *thread, void *data)
 
 	blog(LOG_INFO, "AJASource::Capturethread: Thread loop stopped");
 
-	ajaSource->GenerateTestPattern(sourceProps.videoFormat,
-				       sourceProps.pixelFormat,
-				       NTV2_TestPatt_Black);
+	obs_source_output_video2(ajaSource->GetOBSSource(), NULL);
 
 	obs_data_release(settings);
 }

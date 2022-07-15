@@ -5,7 +5,6 @@
 #include <obs-module.h>
 
 #include <ajantv2/includes/ajatypes.h>
-#include <ajantv2/includes/ntv2testpatterngen.h>
 
 #include <ajabase/common/types.h>
 #include <ajabase/system/thread.h>
@@ -27,9 +26,6 @@ public:
 	obs_source_t *GetOBSSource(void) const;
 	void SetName(const std::string &name);
 	std::string GetName() const;
-
-	void GenerateTestPattern(NTV2VideoFormat vf, NTV2PixelFormat pf,
-				 NTV2TestPatternSelect ps);
 
 	// Capture Thread stuff
 	static void CaptureThread(AJAThread *thread, void *data);
@@ -75,8 +71,6 @@ private:
 	bool mIsCapturing;
 
 	SourceProps mSourceProps;
-
-	NTV2TestPatternBuffer mTestPattern;
 
 	AJAThread *mCaptureThread;
 	std::mutex mMutex;
