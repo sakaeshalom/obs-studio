@@ -36,6 +36,7 @@ protected:
 	speaker_layout channelFormat = SPEAKERS_STEREO;
 	bool swap;
 	bool allow10Bit;
+	int n_frame_ignored_cont = 0;
 
 	OBSVideoFrame *convertFrame = nullptr;
 	IDeckLinkMutableVideoFrame *decklinkOutputFrame = nullptr;

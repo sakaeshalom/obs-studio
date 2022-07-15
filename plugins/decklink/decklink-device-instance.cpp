@@ -136,6 +136,14 @@ void DeckLinkDeviceInstance::HandleAudioPacket(
 		&currentPacket);
 }
 
+static inline bool test_zero(const uint8_t *b, int n)
+{
+	while(n--) {
+		if(*b++) return false;
+	}
+	return true;
+}
+
 void DeckLinkDeviceInstance::HandleVideoFrame(
 	IDeckLinkVideoInputFrame *videoFrame, const uint64_t timestamp)
 {
@@ -192,9 +200,22 @@ void DeckLinkDeviceInstance::HandleVideoFrame(
 	currentFrame.height = (uint32_t)frame->GetHeight();
 	currentFrame.timestamp = timestamp;
 
-	obs_source_output_video2(
-		static_cast<DeckLinkInput *>(decklink)->GetSource(),
-		&currentFrame);
+	if (test_zero(currentFrame.data[0], currentFrame.linesize[0])) {
+		if(n_frame_ignored_cont++<5)
+			blog(LOG_WARNING, "skipping frame because first line was not updated.");
+	} else if (test_zero(currentFrame.data[0]+currentFrame.linesize[0]*(currentFrame.height-1), currentFrame.linesize[0])) {
+		if(n_frame_ignored_cont++<5)
+			blog(LOG_WARNING, "skipping frame because last line was not updated.");
+	} else {
+		n_frame_ignored_cont = 0;
+
+		obs_source_output_video2(
+			static_cast<DeckLinkInput *>(decklink)->GetSource(),
+			&currentFrame);
+	}
+
+	memset(currentFrame.data[0], 0, currentFrame.linesize[0]);
+	memset(currentFrame.data[0]+currentFrame.linesize[0]*(currentFrame.height-1), 0, currentFrame.linesize[0]);
 }
 
 void DeckLinkDeviceInstance::HandleCaptionPacket(
