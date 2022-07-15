@@ -603,12 +603,7 @@ bool DeckLinkDeviceInstance::StartOutput(DeckLinkDeviceMode *mode_)
 		frameDuplication = (uint32_t)((num + den - 1) / den);
 	}
 
-	driftAverage = RollingAverage(DRIFT_AVERAGE_SAMPLES);
-
 	framesSinceDriftCalc = 0; // debug only
-	SetClockTimingAdjustment(0); // debug only
-
-	clockAdjustment = GetClockTimingAdjustment();
 
 	playbackStarted = false;
 
@@ -632,48 +627,6 @@ bool DeckLinkDeviceInstance::StopOutput()
 	return true;
 }
 
-int64_t DeckLinkDeviceInstance::GetClockTimingAdjustment()
-{
-	bool clockAdjustmentSupported = device->GetSupportsClockAdjustment();
-	if (!clockAdjustmentSupported)
-		return 0;
-
-	ComPtr<IDeckLinkConfiguration> deckLinkConfiguration;
-	HRESULT configResult = output->QueryInterface(IID_IDeckLinkConfiguration, (void **)&deckLinkConfiguration);
-	if (configResult != S_OK) {
-		LOG(LOG_ERROR, "Could not obtain the IDeckLinkConfiguration interface: %08x\n", configResult);
-		return 0;
-	}
-
-	int64_t ret;
-	HRESULT getResult = deckLinkConfiguration->GetInt(bmdDeckLinkConfigClockTimingAdjustment, &ret);
-	if (getResult != S_OK) {
-		LOG(LOG_WARNING, "Getting clock adjustment failed: %08x", getResult);
-		return 0;
-	}
-
-	return ret;
-}
-
-void DeckLinkDeviceInstance::SetClockTimingAdjustment(int64_t adj)
-{
-	bool clockAdjustmentSupported = device->GetSupportsClockAdjustment();
-	if (!clockAdjustmentSupported)
-		return;
-
-	ComPtr<IDeckLinkConfiguration> deckLinkConfiguration;
-	HRESULT configResult = output->QueryInterface(IID_IDeckLinkConfiguration, (void **)&deckLinkConfiguration);
-	if (configResult != S_OK) {
-		LOG(LOG_ERROR, "Could not obtain the IDeckLinkConfiguration interface: %08x\n", configResult);
-	} else {
-		int64_t value = std::clamp(adj, (int64_t)-127, (int64_t)127);
-
-		HRESULT setResult = deckLinkConfiguration->SetInt(bmdDeckLinkConfigClockTimingAdjustment, value);
-		if (setResult != S_OK)
-			LOG(LOG_WARNING, "Setting clock adjustment with value %ld failed: %08x", adj, setResult);
-	}
-}
-
 void DeckLinkDeviceInstance::TickDriftTracker()
 {
 	BMDTimeValue hardwareTime, timeInFrame, ticksPerFrame;
@@ -689,8 +642,6 @@ void DeckLinkDeviceInstance::TickDriftTracker()
 	uint64_t systemDuration = systemTime - systemStartTime;
 	int64_t timestampOffset = hardwareDuration - systemDuration;
 
-	driftAverage.SubmitSample(timestampOffset);
-
 	// DEBUG BELOW IGNORE ================================
 
 	// Only operate every 300 frames
@@ -704,21 +655,6 @@ void DeckLinkDeviceInstance::TickDriftTracker()
 
 	uint32_t bufferedVideoFrames;
 	output->GetBufferedVideoFrameCount(&bufferedVideoFrames);
-
-	blog(LOG_INFO, "Drift is now at %ldus | Buffered video frames: %d | Buffered audio frames: %d", timestampOffset ? (timestampOffset / 1000) : 0, bufferedVideoFrames, bufferedAudioFrames);
-}
-
-void DeckLinkDeviceInstance::CorrectDrift()
-{
-	int64_t average = driftAverage.GetAverage();
-
-	int64_t clockAdjustment_next = -average / CLOCK_ADJUST_DIVISOR;
-
-	if (std::abs(clockAdjustment_next - clockAdjustment) > CLOCK_ADJUST_HYSTERESIS) {
-		clockAdjustment += (clockAdjustment_next > clockAdjustment) ? 1 : -1;
-
-		SetClockTimingAdjustment(clockAdjustment);
-	}
 }
 
 void DeckLinkDeviceInstance::DisplayVideoFrame(video_data *frame)
@@ -778,8 +714,6 @@ HRESULT DeckLinkDeviceInstance::ScheduledPlaybackHasStopped()
 void DeckLinkDeviceInstance::WriteAudio(audio_data *frames)
 {
 	TickDriftTracker();
-
-	CorrectDrift();
 
 	uint32_t sampleFramesWritten;
 	output->ScheduleAudioSamples(frames->data[0],

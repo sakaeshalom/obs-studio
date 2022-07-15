@@ -56,9 +56,6 @@ protected:
 	uint64_t systemStartTime = 0;
 	uint64_t nextVideoTime = 0;
 
-	RollingAverage driftAverage;
-	int64_t clockAdjustment = 0;
-
 	size_t framesSinceDriftCalc = 0; // debug only
 
 	OBSVideoFrame *convertFrame = nullptr;
@@ -133,12 +130,7 @@ public:
 	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv);
 	ULONG STDMETHODCALLTYPE Release(void);
 
-	int64_t GetClockTimingAdjustment(void);
-	void SetClockTimingAdjustment(int64_t adj);
-
 	void TickDriftTracker(void);
-
-	void CorrectDrift(void);
 
 	void DisplayVideoFrame(video_data *frame);
 	void WriteAudio(audio_data *frames);
