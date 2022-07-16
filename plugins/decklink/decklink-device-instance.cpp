@@ -762,8 +762,6 @@ HRESULT STDMETHODCALLTYPE DeckLinkDeviceInstance::VideoInputFrameArrived(
 
 	if (videoFrame && videoTS >= 0)
 		HandleVideoFrame(videoFrame, (uint64_t)videoTS);
-	if (audioPacket && audioTS >= 0)
-		HandleAudioPacket(audioPacket, (uint64_t)audioTS);
 
 	return S_OK;
 }
