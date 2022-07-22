@@ -5094,13 +5094,28 @@ void obs_source_set_audio_mixers(obs_source_t *source, uint32_t mixers)
 	if (source->audio_mixers == mixers)
 		return;
 
+	blog(LOG_INFO, "obs_source_set_audio_mixers: source '%s' mixers=%#x was %#x",
+			source->context.name, mixers, source->audio_mixers);
+
 	calldata_init_fixed(&data, stack, sizeof(stack));
 	calldata_set_ptr(&data, "source", source);
 	calldata_set_int(&data, "mixers", mixers);
 
 	signal_handler_signal(source->context.signals, "audio_mixers", &data);
 
+	uint32_t mixers_org = mixers;
+	long long mixers_cd = mixers;
+
+	if (!calldata_get_int(&data, "mixers", &mixers_cd)) {
+		blog(LOG_ERROR, "obs_source_set_audio_mixers: calldata_get_int failed.\n");
+		return;
+	}
+
 	mixers = (uint32_t)calldata_int(&data, "mixers");
+
+	if (mixers != mixers_org)
+		blog(LOG_INFO, "obs_source_set_audio_mixers: source '%s' mixers=%#x overwritten by the signal",
+			source->context.name, mixers);
 
 	source->audio_mixers = mixers;
 }
