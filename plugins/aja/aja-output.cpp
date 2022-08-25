@@ -628,7 +628,6 @@ void AJAOutput::CreateThread(bool enable)
 	const std::lock_guard<std::mutex> lock(mRunThreadLock);
 	if (!mRunThread.Active()) {
 		mRunThread.SetPriority(AJA_ThreadPriority_High);
-		mRunThread.SetThreadName("AJA Video Output Thread");
 		mRunThread.Attach(AJAOutput::OutputThread, this);
 	}
 	if (enable) {
