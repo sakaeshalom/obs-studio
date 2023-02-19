@@ -348,6 +348,8 @@ extern video_t *video_output_create_with_frame_rate_divisor(video_t *video,
 							    uint32_t divisor);
 extern void video_output_free_frame_rate_divisor(video_t *video);
 
+extern void video_output_request_sleep_ms(video_t *video, long sleep_ms);
+
 #ifdef __cplusplus
 }
 #endif
