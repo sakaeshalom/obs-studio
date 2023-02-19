@@ -32,7 +32,7 @@
 extern profiler_name_store_t *obs_get_profiler_name_store(void);
 
 #define MAX_CONVERT_BUFFERS 3
-#define MAX_CACHE_SIZE 16
+#define MAX_CACHE_SIZE 128
 
 struct cached_frame_info {
 	struct video_data frame;
