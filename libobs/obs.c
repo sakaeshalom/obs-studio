@@ -41,7 +41,7 @@ static inline void make_video_info(struct video_output_info *vi,
 	vi->height = ovi->output_height;
 	vi->range = ovi->range;
 	vi->colorspace = ovi->colorspace;
-	vi->cache_size = 6;
+	vi->cache_size = 128;
 }
 
 static inline void calc_gpu_conversion_sizes(struct obs_core_video_mix *video)
