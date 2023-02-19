@@ -298,6 +298,18 @@ void OBSBasic::TransitionFullyStopped()
 	}
 }
 
+static void suspend_video(int max_ms)
+{
+	video_t *video = obs_get_video();
+	size_t remaining_cache = video_output_get_max_cache_size(video) - video_output_get_current_cache_size(video);
+	int sleep_frames = std::max(0, (int)remaining_cache - 32);
+	int sleep_ms = std::min(sleep_frames * 16, max_ms);
+	if (sleep_ms > 0) {
+		blog(LOG_INFO, "UI suspend_video: sleep_ms=%d", sleep_ms);
+		video_output_request_sleep_ms(video, sleep_ms);
+	}
+}
+
 void OBSBasic::TransitionToScene(OBSSource source, bool force,
 				 bool quickTransition, int quickDuration,
 				 bool black, bool manual)
@@ -381,6 +393,8 @@ void OBSBasic::TransitionToScene(OBSSource source, bool force,
 			       : OBS_TRANSITION_MODE_AUTO;
 
 		EnableTransitionWidgets(false);
+
+		suspend_video(duration);
 
 		bool success = obs_transition_start(transition, mode, duration,
 						    source);
