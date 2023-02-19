@@ -527,6 +527,16 @@ const struct video_output_info *video_output_get_info(const video_t *video)
 	return video ? &video->info : NULL;
 }
 
+size_t video_output_get_current_cache_size(const video_t *video)
+{
+	return video->info.cache_size - video->available_frames;
+}
+
+size_t video_output_get_max_cache_size(const video_t *video)
+{
+	return video->info.cache_size;
+}
+
 bool video_output_lock_frame(video_t *video, struct video_frame *frame,
 			     int count, uint64_t timestamp)
 {

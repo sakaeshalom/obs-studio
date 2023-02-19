@@ -324,6 +324,8 @@ EXPORT const struct video_output_info *
 video_output_get_info(const video_t *video);
 EXPORT bool video_output_lock_frame(video_t *video, struct video_frame *frame,
 				    int count, uint64_t timestamp);
+EXPORT size_t video_output_get_current_cache_size(const video_t *video);
+EXPORT size_t video_output_get_max_cache_size(const video_t *video);
 EXPORT void video_output_unlock_frame(video_t *video);
 EXPORT uint64_t video_output_get_frame_time(const video_t *video);
 EXPORT void video_output_stop(video_t *video);
