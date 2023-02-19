@@ -333,6 +333,8 @@ extern void video_output_dec_texture_encoders(video_t *video);
 extern void video_output_inc_texture_frames(video_t *video);
 extern void video_output_inc_texture_skipped_frames(video_t *video);
 
+extern void video_output_request_sleep_ms(video_t *video, long sleep_ms);
+
 #ifdef __cplusplus
 }
 #endif

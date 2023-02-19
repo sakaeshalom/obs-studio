@@ -79,6 +79,8 @@ struct video_output {
 
 	volatile bool raw_active;
 	volatile long gpu_refs;
+
+	volatile long request_sleep_ms;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -119,6 +121,12 @@ static inline bool video_output_cur_frame(struct video_output *video)
 	struct cached_frame_info *frame_info;
 	bool complete;
 	bool skipped;
+
+	long request_sleep_ms = os_atomic_exchange_long(&video->request_sleep_ms, 0);
+	if (request_sleep_ms > 0) {
+		blog(LOG_INFO, "video_output_cur_frame: Sleeping %d ms", (int)request_sleep_ms);
+		os_sleep_ms(request_sleep_ms);
+	}
 
 	/* -------------------------------- */
 
@@ -626,4 +634,12 @@ void video_output_inc_texture_frames(video_t *video)
 void video_output_inc_texture_skipped_frames(video_t *video)
 {
 	os_atomic_inc_long(&video->skipped_frames);
+}
+
+void video_output_request_sleep_ms(video_t *video, long sleep_ms)
+{
+	if (!video)
+		return;
+
+	os_atomic_set_long(&video->request_sleep_ms, sleep_ms);
 }
