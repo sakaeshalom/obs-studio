@@ -90,6 +90,9 @@ extern void render_display(struct obs_display *display);
 static inline void render_displays(void)
 {
 	struct obs_display *display;
+	bool too_slow = false;
+	static int next_display = 0;
+	int i_display;
 
 	if (!obs->data.valid)
 		return;
@@ -97,16 +100,39 @@ static inline void render_displays(void)
 	gs_enter_context(obs->video.graphics);
 
 	/* render extra displays/swaps */
-	pthread_mutex_lock(&obs->data.displays_mutex);
-
-	display = obs->data.first_display;
-	while (display) {
-		render_display(display);
-		display = display->next;
+	if (pthread_mutex_trylock(&obs->data.displays_mutex)) {
+		blog(LOG_ERROR, "pthread_mutex_trylock(displays_mutex) failed.");
+		goto lockfail;
 	}
+
+	uint64_t t0 = obs_get_video_frame_time();
+	uint64_t tint = obs_get_frame_interval_ns();
+	uint64_t tth = t0 + tint * 1 / 4;
+	int n_displayed = 0;
+	display = obs->data.first_display;
+	i_display = 0;
+	while (display) {
+		if (i_display>=next_display) {
+			render_display(display);
+			n_displayed++;
+			uint64_t t1 = os_gettime_ns();
+			if (t1 > tth || (tint < 25000000 && n_displayed > 2)) {
+				too_slow = 1;
+				next_display = i_display+1;
+				break;
+			}
+		}
+
+		display = display->next;
+		i_display ++;
+	}
+
+	if (!too_slow)
+		next_display = 0;
 
 	pthread_mutex_unlock(&obs->data.displays_mutex);
 
+lockfail:
 	gs_leave_context();
 }
 
@@ -887,6 +913,7 @@ static inline void output_video_data(struct obs_core_video_mix *video,
 	}
 }
 
+static int render_too_slow = 0;
 static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 			       uint64_t interval_ns)
 {
@@ -898,6 +925,12 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 	if (os_sleepto_ns(t)) {
 		*p_time = t;
 		count = 1;
+		render_too_slow = 0;
+	} else if (os_gettime_ns()-t < interval_ns / 2) {
+		/* If the lag is less than the half of the interval, just skip display rendering. */
+		*p_time = t;
+		count = 1;
+		render_too_slow ++;
 	} else {
 		const uint64_t udiff = os_gettime_ns() - cur_time;
 		int64_t diff;
@@ -907,6 +940,7 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 						      : interval_ns;
 		count = (int)(clamped_diff / interval_ns);
 		*p_time = cur_time + interval_ns * count;
+		render_too_slow ++;
 	}
 
 	video->total_frames += count;
@@ -1177,6 +1211,7 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 {
 	uint64_t frame_start = os_gettime_ns();
 	uint64_t frame_time_ns;
+	uint64_t t0, t1;
 
 	update_active_states();
 
@@ -1187,9 +1222,12 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	gs_leave_context();
 
 	profile_start(tick_sources_name);
+	t0 = os_gettime_ns();
 	context->last_time =
 		tick_sources(obs->video.video_time, context->last_time);
 	profile_end(tick_sources_name);
+	t1 = os_gettime_ns() - t0;
+	if (t1 > context->interval) blog(LOG_ERROR, "obs_graphics_thread_loop: tick_sources took %dms", (int)(t1/1000000));
 
 #ifdef _WIN32
 	MSG msg;
@@ -1203,9 +1241,14 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	output_frames();
 	profile_end(output_frame_name);
 
-	profile_start(render_displays_name);
-	render_displays();
-	profile_end(render_displays_name);
+	if ((render_too_slow % 16) == 0) {
+		profile_start(render_displays_name);
+		t0 = os_gettime_ns();
+		render_displays();
+		profile_end(render_displays_name);
+		t1 = os_gettime_ns() - t0;
+		if (t1 > context->interval) blog(LOG_ERROR, "obs_graphics_thread_loop: render_displays took %dms", (int)(t1/1000000));
+	}
 
 	execute_graphics_tasks();
 
@@ -1216,6 +1259,19 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	profile_reenable_thread();
 
 	video_sleep(&obs->video, &obs->video.video_time, context->interval);
+
+	if (render_too_slow) {
+		// Suspend video_thread for 1/2 frame time.
+		video_t *video = obs_get_video();
+		if (video) {
+			int current_cache = (int)video_output_get_current_cache_size(video);
+			int sleep_frames = current_cache >= 72 ? 0 : 72 - current_cache;
+			if (sleep_frames > 8)
+				sleep_frames = 8;
+			if (sleep_frames > 0)
+				video_output_request_sleep_ms(video, context->interval * sleep_frames / 1000000);
+		}
+	}
 
 	context->frame_time_total_ns += frame_time_ns;
 	context->fps_total_ns += (obs->video.video_time - context->last_time);
