@@ -853,12 +853,10 @@ uint64_t os_time_compensation_ns(uint64_t ns)
 	return ns + os_atomic_load_long(&compensation_offset);
 }
 
-#ifdef _WIN32
 uint64_t os_time_compensation_peek_offset_ns()
 {
 	return os_atomic_load_long(&compensation_offset);
 }
-#endif // _WIN32
 
 void os_time_compensation_set_error(int64_t error_ns)
 {
