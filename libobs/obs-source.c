@@ -1220,12 +1220,17 @@ static void async_tick(obs_source_t *source)
 	if (deinterlacing_enabled(source)) {
 		deinterlace_process_last_frame(source, sys_time);
 	} else {
-		if (source->cur_async_frame) {
-			remove_async_frame(source, source->cur_async_frame);
-			source->cur_async_frame = NULL;
-		}
+		struct obs_source_frame *new_frame =
+			get_closest_frame(source, sys_time);
+		if (new_frame) {
+			if (source->cur_async_frame) {
+				remove_async_frame(source,
+						   source->cur_async_frame);
+				source->cur_async_frame = NULL;
+			}
 
-		source->cur_async_frame = get_closest_frame(source, sys_time);
+			source->cur_async_frame = new_frame;
+		}
 	}
 
 	source->last_sys_timestamp = sys_time;
