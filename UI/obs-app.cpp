@@ -3445,6 +3445,7 @@ int main(int argc, char *argv[])
 
 	log_blocked_dlls();
 #endif
+	blog(LOG_INFO, "Genlock last offset: %0.3f ms", os_time_compensation_peek_offset_ns() * 1e-6);
 
 	blog(LOG_INFO, "Number of memory leaks: %ld", bnum_allocs());
 	base_set_log_handler(nullptr, nullptr);
