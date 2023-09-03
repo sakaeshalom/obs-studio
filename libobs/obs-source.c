@@ -643,6 +643,9 @@ void obs_source_destroy(struct obs_source *source)
 		pthread_mutex_lock(&source->audio_cb_mutex);
 		da_free(source->audio_cb_list);
 		pthread_mutex_unlock(&source->audio_cb_mutex);
+
+		if (source->flags & OBS_SOURCE_FLAG_MASTER_CLOCK)
+			os_time_compensation_disable();
 	}
 
 	pthread_mutex_lock(&source->caption_cb_mutex);
@@ -1552,8 +1555,9 @@ static void source_output_audio_data(obs_source_t *source,
 	}
 
 	if (source->flags & OBS_SOURCE_FLAG_MASTER_CLOCK) {
-		os_time_compensation_set_error(in.timestamp - data->timestamp +
-					       source->resample_offset);
+		if (push_back)
+			os_time_compensation_set_error(
+					in.timestamp - data->timestamp + source->resample_offset);
 
 		if (source->last_async_compensation && source->resampler) {
 			source->last_async_compensation = false;
