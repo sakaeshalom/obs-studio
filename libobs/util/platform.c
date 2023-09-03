@@ -819,7 +819,9 @@ static int64_t compensation_offset_rem = 0;
 static volatile bool compensation_filter_configured = false;
 static struct lag_lead_filter compensation_filter = {0};
 static uint64_t compensation_last_ns = 0;
+static uint64_t compensation_error_last_ns = 0;
 #define COMPENSATION_TICK_MAX_NS 50000000 // twice of obs_hotkey_thread
+#define COMPENSATION_ERROR_UNAVAILABLE_NS (500*1000*1000)
 
 uint64_t os_time_compensation_ns(uint64_t ns)
 {
@@ -847,6 +849,11 @@ uint64_t os_time_compensation_ns(uint64_t ns)
 				compensation_offset_rem / 1000000000;
 			compensation_offset_rem %= 1000000000;
 		}
+
+		uint64_t current_ns = ns + compensation_offset;
+		if (current_ns > compensation_error_last_ns && current_ns - compensation_error_last_ns > COMPENSATION_ERROR_UNAVAILABLE_NS)
+			os_time_compensation_disable();
+
 		pthread_mutex_unlock(&compensation_mutex);
 	}
 
@@ -861,7 +868,6 @@ uint64_t os_time_compensation_peek_offset_ns()
 void os_time_compensation_set_error(int64_t error_ns)
 {
 	if (pthread_mutex_lock(&compensation_mutex) == 0) {
-		static uint64_t last_ns = 0;
 		uint64_t current_ns = os_gettime_ns();
 		if (!compensation_filter_configured) {
 			lag_lead_filter_set_parameters(&compensation_filter,
@@ -869,22 +875,22 @@ void os_time_compensation_set_error(int64_t error_ns)
 			lag_lead_filter_reset(&compensation_filter);
 			compensation_last_ns = current_ns;
 			compensation_filter_configured = true;
-			last_ns = current_ns;
+			compensation_error_last_ns = current_ns;
 		}
 		uint32_t tick_ns = 0;
-		if (current_ns - last_ns < COMPENSATION_TICK_MAX_NS)
-			tick_ns = current_ns - last_ns;
+		if (current_ns - compensation_error_last_ns < COMPENSATION_TICK_MAX_NS)
+			tick_ns = current_ns - compensation_error_last_ns;
 		else
 			tick_ns = COMPENSATION_TICK_MAX_NS;
 
 		lag_lead_filter_tick(&compensation_filter, 1000000000, tick_ns);
-		last_ns = current_ns;
+		compensation_error_last_ns = current_ns;
 
 		lag_lead_filter_set_error_ns(&compensation_filter, error_ns);
 
 #ifdef DEBUG_COMPENSATION
 		static uint64_t log_last_ns = 0;
-		if (current_ns - log_last_ns > 1000250000) {
+		if (current_ns - log_last_ns > 60000250000ULL) {
 			blog(LOG_INFO,
 			     "os_time_compensation_set_error: error=%f ms compensation_offset=%f ms"
 			     " internal-condition=(%f %f)",
@@ -900,5 +906,14 @@ void os_time_compensation_set_error(int64_t error_ns)
 
 void os_time_compensation_disable()
 {
+	if (!compensation_filter_configured)
+		return;
+
+	blog(LOG_INFO,
+		"Disabling genlock...\n"
+		"\tAdded offset:          %f ms\n"
+		"\tLast filter condition: %f ppm",
+		compensation_offset * 1e-6, compensation_filter.vc2 * 1e-3);
+
 	compensation_filter_configured = false;
 }
