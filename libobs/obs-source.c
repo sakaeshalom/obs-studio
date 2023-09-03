@@ -1352,6 +1352,8 @@ static inline void reset_audio_timing(obs_source_t *source, uint64_t timestamp,
 {
 	source->timing_set = true;
 	source->timing_adjust = os_time - timestamp;
+	if (source->flags & OBS_SOURCE_FLAG_MASTER_CLOCK)
+		os_time_compensation_disable();
 }
 
 static void reset_audio_data(obs_source_t *source, uint64_t os_time)
