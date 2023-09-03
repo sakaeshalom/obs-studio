@@ -1354,6 +1354,9 @@ static inline void reset_audio_timing(obs_source_t *source, uint64_t timestamp,
 	source->timing_adjust = os_time - timestamp;
 	if (source->flags & OBS_SOURCE_FLAG_MASTER_CLOCK)
 		os_time_compensation_disable();
+	blog(LOG_INFO, "reset_audio_timing '%s' timestamp %f ms os_time %f ms",
+			obs_source_get_name(source),
+			timestamp * 1e-6, os_time * 1e-6);
 }
 
 static void reset_audio_data(obs_source_t *source, uint64_t os_time)
@@ -1422,13 +1425,12 @@ static void source_output_audio_place(obs_source_t *source,
 		get_buf_placement(audio, in->timestamp - source->audio_ts) *
 		sizeof(float);
 
-#if DEBUG_AUDIO == 1
-	blog(LOG_DEBUG,
-	     "frames: %lu, size: %lu, placement: %lu, base_ts: %llu, ts: %llu",
-	     (unsigned long)in->frames,
-	     (unsigned long)source->audio_input_buf[0].size,
-	     (unsigned long)buf_placement, source->audio_ts, in->timestamp);
-#endif
+	blog(LOG_INFO,
+	     "source_output_audio_place '%s' frames: %"PRIu32", size: %"PRIu64", placement: %"PRIu64", base_ts: %"PRIu64", ts: %"PRIu64"",
+	     obs_source_get_name(source),
+	     in->frames,
+	     source->audio_input_buf[0].size,
+	     buf_placement, source->audio_ts, in->timestamp);
 
 	/* do not allow the circular buffers to become too big */
 	if ((buf_placement + size) > MAX_BUF_SIZE)
@@ -1453,8 +1455,16 @@ static inline void source_output_audio_push_back(obs_source_t *source,
 	size_t size = in->frames * sizeof(float);
 
 	/* do not allow the circular buffers to become too big */
-	if ((source->audio_input_buf[0].size + size) > MAX_BUF_SIZE)
+	if ((source->audio_input_buf[0].size + size) > MAX_BUF_SIZE) {
+		blog(LOG_INFO, "source_output_audio_push_back '%s' reached MAX_BUF_SIZE",
+				obs_source_get_name(source));
 		return;
+	}
+
+	if (source->audio_input_buf[0].size == 0) {
+		blog(LOG_INFO, "source_output_audio_push_back '%s' buffer was empty",
+				obs_source_get_name(source));
+	}
 
 	for (size_t i = 0; i < channels; i++)
 		circlebuf_push_back(&source->audio_input_buf[i], in->data[i],
@@ -1553,6 +1563,8 @@ static void source_output_audio_data(obs_source_t *source,
 			 * resync.  This handles all cases rather than just looping. */
 			reset_audio_timing(source, data->timestamp, os_time);
 			in.timestamp = data->timestamp + source->timing_adjust;
+			blog(LOG_INFO, "source_output_audio_data '%s' too large diff %f ms",
+					obs_source_get_name(source), diff * 1e-6);
 		}
 	}
 

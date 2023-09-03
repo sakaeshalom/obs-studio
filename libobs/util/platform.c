@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-// #define DEBUG_COMPENSATION
+#define DEBUG_COMPENSATION
 
 #define _FILE_OFFSET_BITS 64
 
@@ -891,8 +891,8 @@ void os_time_compensation_set_error(int64_t error_ns)
 		static uint64_t log_last_ns = 0;
 		if (current_ns - log_last_ns > 60000250000ULL) {
 			blog(LOG_INFO,
-			     "os_time_compensation_set_error: error=%f ms compensation_offset=%f ms"
-			     " internal-condition=(%f %f)",
+			     "os_time_compensation_set_error: error=%+f ms compensation_offset=%+f ms"
+			     " internal-condition=(%+f %+f)",
 			     error_ns * 1e-6, compensation_offset * 1e-6,
 			     compensation_filter.vc1, compensation_filter.vc2);
 			log_last_ns = current_ns;
