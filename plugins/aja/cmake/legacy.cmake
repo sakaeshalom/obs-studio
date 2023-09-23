@@ -66,7 +66,7 @@ elseif(OS_WINDOWS)
 endif()
 
 if(NOT MSVC)
-  target_compile_options(aja PRIVATE -Wno-error=deprecated-declarations)
+  target_compile_options(aja PRIVATE -Wno-deprecated-declarations)
 endif()
 
 set_target_properties(aja PROPERTIES FOLDER "plugins/aja" PREFIX "")
