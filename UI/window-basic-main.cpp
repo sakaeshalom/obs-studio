@@ -4716,7 +4716,7 @@ bool OBSBasic::ResetAudio()
 	bool lowLatencyAudioBuffering = config_get_bool(
 		GetGlobalConfig(), "Audio", "LowLatencyAudioBuffering");
 	if (lowLatencyAudioBuffering) {
-		ai.max_buffering_ms = 50;
+		ai.max_buffering_ms = 350;
 		ai.fixed_buffering = true;
 	}
 
